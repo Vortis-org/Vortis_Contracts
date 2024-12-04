@@ -1,9 +1,9 @@
 import { toNano } from '@ton/core';
-import { PredictionMarket } from '../wrappers/PredictionMarket';
+import { BinaryPredictionMarket } from '../wrappers/PredictionMarket';
 import { NetworkProvider } from '@ton/blueprint';
 
 export async function run(provider: NetworkProvider) {
-    const predictionMarket = provider.open(await PredictionMarket.fromInit());
+    const predictionMarket = provider.open(await BinaryPredictionMarket.fromInit());
 
     await predictionMarket.send(
         provider.sender(),
@@ -13,7 +13,7 @@ export async function run(provider: NetworkProvider) {
         {
             $$type: 'Deploy',
             queryId: 0n,
-        }
+        },
     );
 
     await provider.waitForDeploy(predictionMarket.address);
