@@ -5,6 +5,32 @@ import "@stdlib/ownable";
 const MINIMUM_BET: Int = ton("0.1");
 const HOUSE_FEE_PERCENT: Int = 2;
 
+message(0x1234) CreateMarket {
+    id: Int;
+    description: Cell;
+    predictionX: Cell;
+    predictionY: Cell;
+    endTime: Int;
+}
+
+message(0x2345) PlaceBet {
+    marketId: Int;
+    prediction: Int;
+}
+
+message(0x3456) CloseMarket {
+    marketId: Int;
+}
+
+message(0x4567) DecideWinner {
+    marketId: Int;
+    winningPrediction: Int;
+}
+
+message(0x5678) ClaimReward {
+    marketId: Int;
+}
+
 // Bet structure that includes both market ID and better address
 struct Bet {
     marketId: Int;
@@ -28,32 +54,6 @@ struct Market {
     poolY: Int;
 }
 
-message CreateMarket {
-    id: Int;
-    description: Cell;
-    predictionX: Cell;
-    predictionY: Cell;
-    endTime: Int;
-}
-
-message PlaceBet {
-    marketId: Int;
-    prediction: Int;
-}
-
-message CloseMarket {
-    marketId: Int;
-}
-
-message DecideWinner {
-    marketId: Int;
-    winningPrediction: Int;
-}
-
-message ClaimReward {
-    marketId: Int;
-}
-
 contract BinaryPredictionMarket with Deployable {
     const UNDECIDED: Int = 0;
     const PREDICTION_X: Int = 1;
@@ -65,9 +65,7 @@ contract BinaryPredictionMarket with Deployable {
 
     owner: Address;
     markets: map<Int, Market>;
-    // Using Int as key by combining marketId and address hash
     bets: map<Int, Bet>;
-    // Track the next available bet ID
     nextBetId: Int;
 
     init(owner: Address) {
@@ -80,7 +78,7 @@ contract BinaryPredictionMarket with Deployable {
     }
 
     // Helper function to find a bet by market ID and better address
-   fun findBet(marketId: Int, better: Address): Int? {
+    fun findBet(marketId: Int, better: Address): Int? {
         let betId: Int = 0;
         while (betId < self.nextBetId) {
             let bet: Bet? = self.bets.get(betId);
@@ -93,6 +91,7 @@ contract BinaryPredictionMarket with Deployable {
         }
         return null;
     }
+
     receive(msg: CreateMarket) {
         self.onlyOwner();
         require(msg.endTime > now(), "End time must be in the future");
@@ -114,10 +113,6 @@ contract BinaryPredictionMarket with Deployable {
         self.markets.set(msg.id, market);
     }
 
-  get fun markets(): map<Int, Market> {
-        return self.markets;
-    }
-
     receive(msg: PlaceBet) {
         let amount: Int = context().value;
         require(amount >= MINIMUM_BET, "Bet amount too low");
@@ -127,10 +122,8 @@ contract BinaryPredictionMarket with Deployable {
         require(now() < market.endTime, "Market ended");
         require((msg.prediction == self.PREDICTION_X) || (msg.prediction == self.PREDICTION_Y), "Must choose X or Y");
 
-        // Check if user already bet on this market
         require(self.findBet(msg.marketId, sender()) == null, "Already bet on this market");
 
-        // Create new bet
         let bet: Bet = Bet{
             marketId: msg.marketId,
             better: sender(),
@@ -139,11 +132,9 @@ contract BinaryPredictionMarket with Deployable {
             claimed: false
         };
 
-        // Store bet with next available ID
         self.bets.set(self.nextBetId, bet);
         self.nextBetId = self.nextBetId + 1;
 
-        // Update market pools
         if (msg.prediction == self.PREDICTION_X) {
             market.poolX += amount;
         } else {
@@ -151,12 +142,6 @@ contract BinaryPredictionMarket with Deployable {
         }
         market.totalPool += amount;
         self.markets.set(msg.marketId, market);
-    }
-
-
-
-  get fun bets(): map<Int, Bet> {
-        return self.bets;
     }
 
     receive(msg: CloseMarket) {
@@ -167,9 +152,6 @@ contract BinaryPredictionMarket with Deployable {
         market.status = self.STATUS_CLOSED;
         self.markets.set(msg.marketId, market);
     }
-
-
-
 
     receive(msg: DecideWinner) {
         self.onlyOwner();
@@ -207,6 +189,14 @@ contract BinaryPredictionMarket with Deployable {
             value: reward,
             mode: SendIgnoreErrors
         });
+    }
+
+    get fun markets(): map<Int, Market> {
+        return self.markets;
+    }
+
+    get fun bets(): map<Int, Bet> {
+        return self.bets;
     }
 
     get fun getMarket(marketId: Int): Market? {
